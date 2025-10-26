@@ -221,7 +221,7 @@
       const el = cells.get(id);
       if(!el) return;
       el.classList.toggle('red', isGrey);
-      
+      el.classList.toggle('grey', !isGrey);
     }
 
     // Socket logic
