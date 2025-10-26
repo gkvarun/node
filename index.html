@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Synchronized Grid (Socket.IO Version)</title>
+  <style>
+    :root {
+      --gap: 6px;
+      --bg: #0f1724;
+      --red: #e11d48;
+      --grey: #9ca3af;
+      --text: #e6eef8;
+    }
+    html, body {
+      height:100%; margin:0;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--bg); color:var(--text);
+      font-family:Inter,system-ui,sans-serif;
+    }
+    .wrap {
+      width:100%; max-width:1100px; padding:16px;
+      display:flex; flex-direction:column; gap:10px; align-items:center;
+    }
+    header {
+      display:flex; justify-content:space-between; width:100%; align-items:center;
+    }
+    .title { font-weight:700; font-size:18px; }
+    .badge {
+      padding:6px 10px; border-radius:999px; font-size:13px;
+    }
+    .mode-master { background:linear-gradient(90deg,#f97316,#ef4444); color:white; }
+    .mode-client { background:linear-gradient(90deg,#06b6d4,#3b82f6); color:white; }
+    .grid {
+      display:grid; grid-template-columns:repeat(10,1fr);
+      gap:var(--gap); width:100%; max-width:90vmin; aspect-ratio:1/1;
+    }
+    .cell {
+      display:flex; align-items:center; justify-content:center;
+      border-radius:8px; font-weight:700;
+      font-size:clamp(10px,1.3vmax,16px);
+      transition:background-color 0.15s ease,transform 0.15s ease;
+      user-select:none;
+    }
+    .cell.red { background:var(--red); color:white; }
+    .cell.grey { background:var(--grey); color:#222; }
+    .cell.master-hoverable:hover { transform:scale(1.05); }
+
+    /* Reset button */
+    .reset-btn {
+      background:#1e293b;
+      border:1px solid #334155;
+      color:#e6eef8;
+      border-radius:8px;
+      padding:6px 12px;
+      font-size:14px;
+      cursor:pointer;
+      transition:background 0.2s ease;
+    }
+    .reset-btn:hover {
+      background:#334155;
+    }
+    @media (max-width:768px){
+      header { flex-direction:column; gap:8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">Synchronized Grid (1–100)</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="modeBadge" class="badge mode-client">Client</div>
+        <button id="resetBtn" class="reset-btn" style="display:none;">Reset</button>
+      </div>
+    </header>
+
+    <main>
+      <div id="grid" class="grid"></div>
+    </main>
+    <footer style="font-size:13px;opacity:0.8">Open <code>?mode=master</code> for master controls.</footer>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const MODE = (params.get('mode') || 'client').toLowerCase() === 'master' ? 'master' : 'client';
+    const modeBadge = document.getElementById('modeBadge');
+    const resetBtn = document.getElementById('resetBtn');
+    const gridEl = document.getElementById('grid');
+
+    modeBadge.textContent = MODE === 'master' ? 'Master' : 'Client';
+    modeBadge.classList.add(MODE === 'master' ? 'mode-master' : 'mode-client');
+    if (MODE === 'master') resetBtn.style.display = 'inline-block';
+
+    const socket = io(); // assumes same-origin server
+    const cells = new Map();
+
+    // Create cells
+    function makeCell(n){
+      const el = document.createElement('div');
+      el.className = 'cell red';
+      el.textContent = n;
+      if(MODE==='master') el.classList.add('master-hoverable');
+      el.addEventListener('click', ()=>{
+        if(MODE!=='master') return;
+        socket.emit('toggleCell', n);
+      });
+      return el;
+    }
+
+    for(let i=1;i<=100;i++){
+      const c = makeCell(i);
+      cells.set(i,c);
+      gridEl.appendChild(c);
+    }
+
+    function setCellState(id, isGrey){
+      const el = cells.get(id);
+      if(!el) return;
+      el.classList.toggle('grey', isGrey);
+      el.classList.toggle('red', !isGrey);
+    }
+
+    // Socket logic
+    socket.on('init', state=>{
+      for(let i=1;i<=100;i++) setCellState(i, !!state[i]);
+    });
+
+    socket.on('update', ({id, value})=>{
+      setCellState(id,value);
+    });
+
+    socket.on('reset', ()=>{
+      for(let i=1;i<=100;i++) setCellState(i,false);
+    });
+
+    // Reset button (master only)
+    resetBtn.addEventListener('click', ()=>{
+      if(MODE!=='master') return;
+      socket.emit('resetGrid');
+    });
+  </script>
+</body>
+</html>
